@@ -5,6 +5,7 @@ out/
 *.class
 *.iml
 .idea/
+.run/
 .project
 .settings/
 .classpath
