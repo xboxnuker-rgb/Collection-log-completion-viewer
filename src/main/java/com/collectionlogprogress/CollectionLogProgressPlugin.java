@@ -19,6 +19,7 @@ import net.runelite.api.ScriptID;
 import net.runelite.api.StructComposition;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.WidgetLoaded;
@@ -47,11 +48,9 @@ public class CollectionLogProgressPlugin extends Plugin
     private static final Logger log = LoggerFactory.getLogger(CollectionLogProgressPlugin.class);
 
     // These cache-backed collection scripts do not currently have public
-    // ScriptID constants. COLLECTION_DELAYED_TRANSMIT supplies item id/quantity;
-    // COLLECTION_INIT restores the normal log immediately after Search requests
-    // the account's complete item snapshot.
+    // ScriptID constants. COLLECTION_DELAYED_TRANSMIT supplies item id/quantity
+    // after the player clicks the native Collection Log Search button.
     private static final int COLLECTION_DELAYED_TRANSMIT = 4100;
-    private static final int COLLECTION_INIT = 2240;
     private static final int COLLECTION_LOG_SETUP = 7797;
 
     private static final int COLLECTION_TAB_ENUM = 2102;
@@ -65,6 +64,8 @@ public class CollectionLogProgressPlugin extends Plugin
     private static final int FILTER_PARTIAL = 1;
     private static final int FILTER_COMPLETED = 2;
     private static final int FILTER_BUTTON_HEIGHT = 22;
+    private static final int FILTER_PROMPT_HEIGHT = 12;
+    private static final int FILTER_PROMPT_GAP = 1;
     private static final int FILTER_BUTTON_IDEAL_WIDTH = 56;
     private static final int FILTER_BUTTON_MIN_WIDTH = 36;
     private static final int FILTER_BUTTON_GAP = 4;
@@ -149,6 +150,7 @@ public class CollectionLogProgressPlugin extends Plugin
     private ConfigManager configManager;
 
     private final Set<Integer> obtainedItems = new HashSet<>();
+    private final Set<Integer> pendingObtainedItems = new HashSet<>();
     private final List<List<CollectionPage>> pagesByTab = new ArrayList<>();
     private final List<int[]> obtainedCountsByTab = new ArrayList<>();
     private final Map<Widget, WidgetState> originalWidgetStates = new IdentityHashMap<>();
@@ -157,6 +159,7 @@ public class CollectionLogProgressPlugin extends Plugin
     private int[] tabObtainedCounts = new int[0];
     private int[] tabTotalCounts = new int[0];
     private Widget filterControlsLayer;
+    private Widget searchPrompt;
 
     private boolean snapshotLoading;
     private boolean snapshotReady;
@@ -178,7 +181,7 @@ public class CollectionLogProgressPlugin extends Plugin
             loadPageDefinitions();
             if (client.getWidget(InterfaceID.Collection.FRAME) != null)
             {
-                scheduleSnapshotRequest();
+                queueSidebarApply();
             }
         });
     }
@@ -203,7 +206,36 @@ public class CollectionLogProgressPlugin extends Plugin
         forgetFilterControls();
         restoreSidebar();
         loadPageDefinitions();
-        scheduleSnapshotRequest();
+        clientThread.invokeLater(() ->
+        {
+            if (isAnotherPlayersLog())
+            {
+                cancelSnapshotCapture();
+            }
+            else
+            {
+                queueSidebarApply();
+            }
+        });
+    }
+
+    @Subscribe
+    public void onMenuOptionClicked(MenuOptionClicked event)
+    {
+        if (event.getParam1() != InterfaceID.Collection.SEARCH_TOGGLE
+            || (event.getMenuAction() != MenuAction.CC_OP
+                && event.getMenuAction() != MenuAction.RUNELITE))
+        {
+            return;
+        }
+
+        if (isAnotherPlayersLog())
+        {
+            cancelSnapshotCapture();
+            return;
+        }
+
+        beginSnapshotCapture();
     }
 
     @Subscribe
@@ -211,6 +243,11 @@ public class CollectionLogProgressPlugin extends Plugin
     {
         if (!snapshotLoading || event.getScriptId() != COLLECTION_DELAYED_TRANSMIT)
         {
+            return;
+        }
+        if (isAnotherPlayersLog())
+        {
+            cancelSnapshotCapture();
             return;
         }
 
@@ -231,7 +268,7 @@ public class CollectionLogProgressPlugin extends Plugin
         int quantity = (Integer) arguments[2];
         if (itemId >= 0 && quantity > 0)
         {
-            obtainedItems.add(itemId);
+            pendingObtainedItems.add(itemId);
         }
         lastTransmitTick = client.getTickCount();
     }
@@ -244,14 +281,11 @@ public class CollectionLogProgressPlugin extends Plugin
             // WikiSync and similar integrations rebuild the shared UNIVERSE
             // children during setup. Recreate our controls after every plugin
             // has finished handling the setup event.
-            if (snapshotReady)
-            {
-                queueSidebarApply();
-            }
+            queueSidebarApply();
             return;
         }
 
-        if (event.getScriptId() == ScriptID.COLLECTION_DRAW_LIST && snapshotReady)
+        if (event.getScriptId() == ScriptID.COLLECTION_DRAW_LIST)
         {
             queueSidebarApply();
         }
@@ -273,11 +307,7 @@ public class CollectionLogProgressPlugin extends Plugin
 
         if (transmissionsSettled || emptySnapshotSettled)
         {
-            snapshotLoading = false;
-            snapshotReady = true;
-            rebuildProgressCache();
-            log.debug("Collection Log snapshot ready with {} obtained item ids", obtainedItems.size());
-            applySidebarProgress();
+            finishSnapshotCapture();
         }
     }
 
@@ -303,64 +333,45 @@ public class CollectionLogProgressPlugin extends Plugin
         clientThread.invokeLater(() ->
         {
             restoreSidebar();
-            if (snapshotReady)
-            {
-                applySidebarProgress();
-            }
+            applySidebarProgress();
         });
     }
 
-    private void scheduleSnapshotRequest()
+    private void beginSnapshotCapture()
     {
-        if (isAnotherPlayersLog())
-        {
-            resetSnapshot();
-            return;
-        }
-        if (snapshotLoading)
-        {
-            return;
-        }
-
-        resetSnapshot();
-        // The interface's dynamic children are populated after WidgetLoaded.
-        clientThread.invokeLater(() -> clientThread.invokeLater(this::requestSnapshot));
-    }
-
-    private void requestSnapshot()
-    {
-        if (snapshotLoading || isAnotherPlayersLog()
-            || client.getWidget(InterfaceID.Collection.FRAME) == null)
-        {
-            return;
-        }
-
-        Widget searchButton = client.getWidget(InterfaceID.Collection.SEARCH_TOGGLE);
-        if (searchButton == null)
-        {
-            log.debug("Collection Log Search button was unavailable; snapshot was not requested");
-            return;
-        }
-
-        obtainedItems.clear();
-        snapshotReady = false;
+        pendingObtainedItems.clear();
         snapshotLoading = true;
         snapshotStartTick = client.getTickCount();
         lastTransmitTick = -1;
+        log.debug("Listening for the native Collection Log Search snapshot");
+    }
 
-        // Search requests every Collection Log item from the game server. The
-        // init script immediately restores the normal page, so the plugin does
-        // not leave the user in Search or alter the central item panel.
-        client.menuAction(
-            -1,
-            InterfaceID.Collection.SEARCH_TOGGLE,
-            MenuAction.CC_OP,
-            1,
-            -1,
-            "Search",
-            null
-        );
-        client.runScript(COLLECTION_INIT);
+    private void finishSnapshotCapture()
+    {
+        if (isAnotherPlayersLog())
+        {
+            cancelSnapshotCapture();
+            return;
+        }
+
+        snapshotLoading = false;
+        snapshotStartTick = -1;
+        lastTransmitTick = -1;
+        obtainedItems.clear();
+        obtainedItems.addAll(pendingObtainedItems);
+        pendingObtainedItems.clear();
+        snapshotReady = true;
+        rebuildProgressCache();
+        log.debug("Collection Log snapshot ready with {} obtained item ids", obtainedItems.size());
+        applySidebarProgress();
+    }
+
+    private void cancelSnapshotCapture()
+    {
+        snapshotLoading = false;
+        snapshotStartTick = -1;
+        lastTransmitTick = -1;
+        pendingObtainedItems.clear();
     }
 
     private boolean isAnotherPlayersLog()
@@ -412,6 +423,18 @@ public class CollectionLogProgressPlugin extends Plugin
 
     private void applySidebarProgress()
     {
+        if (client.getWidget(InterfaceID.Collection.FRAME) == null)
+        {
+            return;
+        }
+        if (isAnotherPlayersLog())
+        {
+            removeFilterControls();
+            restoreSidebar();
+            return;
+        }
+
+        ensureFilterControls();
         if (!snapshotReady)
         {
             return;
@@ -424,8 +447,6 @@ public class CollectionLogProgressPlugin extends Plugin
         {
             rebuildProgressCache();
         }
-
-        ensureFilterControls();
 
         int tabCount = Math.min(
             TITLE_WIDGETS.length,
@@ -758,6 +779,7 @@ public class CollectionLogProgressPlugin extends Plugin
         {
             updateFilterButton(filterIndex);
         }
+        updateSearchPrompt();
     }
 
     private boolean containsDynamicChild(Widget parent, Widget expectedChild)
@@ -781,6 +803,12 @@ public class CollectionLogProgressPlugin extends Plugin
     {
         forgetFilterControls();
         filterControlsLayer = universe.createChild(WidgetType.LAYER);
+        searchPrompt = filterControlsLayer.createChild(WidgetType.TEXT)
+            .setText("Click Search to load")
+            .setFontId(FontID.PLAIN_11)
+            .setTextShadowed(true)
+            .setXTextAlignment(WidgetTextAlignment.CENTER)
+            .setYTextAlignment(WidgetTextAlignment.CENTER);
 
         for (int filterIndex = 0; filterIndex < FILTER_COUNT; filterIndex++)
         {
@@ -855,11 +883,16 @@ public class CollectionLogProgressPlugin extends Plugin
         }
 
         int totalWidth = FILTER_COUNT * buttonWidth + (FILTER_COUNT - 1) * FILTER_BUTTON_GAP;
+        int totalHeight = FILTER_BUTTON_HEIGHT;
+        if (!snapshotReady)
+        {
+            totalHeight += FILTER_PROMPT_GAP + FILTER_PROMPT_HEIGHT;
+        }
         filterControlsLayer
             .setOriginalX(controlsX)
             .setOriginalY(y)
             .setOriginalWidth(totalWidth)
-            .setOriginalHeight(FILTER_BUTTON_HEIGHT)
+            .setOriginalHeight(totalHeight)
             .setHidden(false)
             .revalidate();
 
@@ -888,6 +921,26 @@ public class CollectionLogProgressPlugin extends Plugin
             setBounds(button.checkboxMark, 4, 4, 9, 14);
             setBounds(button.label, 14, 1, buttonWidth - 15, FILTER_BUTTON_HEIGHT - 2);
         }
+
+        setBounds(
+            searchPrompt,
+            0,
+            FILTER_BUTTON_HEIGHT + FILTER_PROMPT_GAP,
+            totalWidth,
+            FILTER_PROMPT_HEIGHT
+        );
+    }
+
+    private void updateSearchPrompt()
+    {
+        if (searchPrompt == null)
+        {
+            return;
+        }
+
+        searchPrompt
+            .setTextColor(config.partialColour().getRGB() & 0xFFFFFF)
+            .setHidden(snapshotReady);
     }
 
     private void setBounds(Widget widget, int x, int y, int width, int height)
@@ -1023,6 +1076,10 @@ public class CollectionLogProgressPlugin extends Plugin
                 button.checkboxMark.setHidden(true);
                 button.label.setHidden(true);
             }
+            if (searchPrompt != null)
+            {
+                searchPrompt.setHidden(true);
+            }
             filterControlsLayer.deleteAllChildren();
             filterControlsLayer
                 .setOriginalWidth(0)
@@ -1036,6 +1093,7 @@ public class CollectionLogProgressPlugin extends Plugin
     private void forgetFilterControls()
     {
         filterControlsLayer = null;
+        searchPrompt = null;
         for (int filterIndex = 0; filterIndex < FILTER_COUNT; filterIndex++)
         {
             filterButtons[filterIndex] = null;
@@ -1176,10 +1234,8 @@ public class CollectionLogProgressPlugin extends Plugin
 
     private void resetSnapshot()
     {
-        snapshotLoading = false;
+        cancelSnapshotCapture();
         snapshotReady = false;
-        snapshotStartTick = -1;
-        lastTransmitTick = -1;
         obtainedItems.clear();
         obtainedCountsByTab.clear();
         tabObtainedCounts = new int[0];
