@@ -17,6 +17,8 @@ partial or completed pages and compact the remaining list.
 - Provides colour pickers for the unstarted, partial and completed anchors.
 - Adds three colour-matched `Hide` checkboxes inside the Collection Log for
   unstarted, partial and completed pages.
+- Shows `Click Search to load` beneath those controls until the first complete
+  snapshot is received.
 - Compacts visible rows and updates the scrollbar when a filter is enabled;
   filter choices persist between sessions.
 - Reserves the configured completion colour for fully completed pages.
@@ -26,9 +28,11 @@ partial or completed pages and compact the remaining list.
 - Aggregates page progress into the five top-level tab titles.
 - Provides separate toggles for colours and percentages.
 
-To obtain the account's item snapshot, the plugin invokes the Collection Log's
-existing Search widget operation and immediately restores the normal page. It
-does not add a menu entry or expose the snapshot outside the client.
+To load progress, open your own Collection Log and click its native **Search**
+button once. The plugin passively listens for the complete item snapshot that
+RuneScape sends after that click. It never operates the button or runs a game
+script to request the data, and it does not expose the snapshot outside the
+client. Click Search again whenever you want to refresh the snapshot.
 
 The plugin does not use external services, write files, alter combat, inject
 input, or automate gameplay.
