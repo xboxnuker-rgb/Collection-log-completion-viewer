@@ -314,7 +314,11 @@ public class CollectionLogProgressPlugin extends Plugin
     @Subscribe
     public void onGameStateChanged(GameStateChanged event)
     {
-        if (event.getGameState() != GameState.LOGGED_IN)
+        GameState gameState = event.getGameState();
+        if (gameState == GameState.LOGIN_SCREEN
+            || gameState == GameState.LOGIN_SCREEN_AUTHENTICATOR
+            || gameState == GameState.HOPPING
+            || gameState == GameState.CONNECTION_LOST)
         {
             removeFilterControls();
             restoreSidebar();
