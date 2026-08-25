@@ -86,6 +86,30 @@ public interface CollectionLogProgressConfig extends Config
     }
 
     @ConfigItem(
+        position = 5,
+        keyName = "sortByCompletion",
+        name = "Sort by completion",
+        description = "Sort Collection Log pages by completion percentage from 100% to 0%",
+        section = sidebarSection
+    )
+    default boolean sortByCompletion()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+        position = 6,
+        keyName = "reverseCompletionSort",
+        name = "Reverse sort order",
+        description = "Reverse completion sorting to run from 0% to 100%",
+        section = sidebarSection
+    )
+    default boolean reverseCompletionSort()
+    {
+        return false;
+    }
+
+    @ConfigItem(
         keyName = "hideUnstartedPages",
         name = "Hide unstarted pages",
         description = "In-log filter state for pages with no obtained items",

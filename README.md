@@ -4,7 +4,8 @@ A passive RuneLite interface plugin that makes Collection Log progress easier
 to scan. Each page name in the left-hand list can show a whole-number completion
 percentage and use fixed state colours: red at 0%, orange from 1–99%, and
 RuneScape's completion green at 100%. In-log controls can hide unstarted,
-partial or completed pages and compact the remaining list.
+partial or completed pages and compact the remaining list. Optional completion
+sorting can place the most- or least-complete pages first.
 
 ## Features
 
@@ -21,6 +22,8 @@ partial or completed pages and compact the remaining list.
   snapshot is received.
 - Compacts visible rows and updates the scrollbar when a filter is enabled;
   filter choices persist between sessions.
+- Optionally sorts rows by completion from `100%` to `0%`, with a reverse-order
+  toggle; matching percentages remain alphabetical.
 - Reserves the configured completion colour for fully completed pages.
 - Reads page definitions from RuneScape's cache rather than maintaining a static
   item list.

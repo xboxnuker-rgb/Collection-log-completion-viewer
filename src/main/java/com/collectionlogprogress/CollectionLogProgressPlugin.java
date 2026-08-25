@@ -40,8 +40,8 @@ import org.slf4j.LoggerFactory;
 
 @PluginDescriptor(
     name = "Collection Log Progress",
-    description = "Colour-coded progress, percentages and filters in Collection Log names",
-    tags = {"collection", "log", "clog", "progress", "completion", "filter", "colour", "color"}
+    description = "Colour-coded progress, percentages, filters and sorting in Collection Log names",
+    tags = {"collection", "log", "clog", "progress", "completion", "filter", "sort", "colour", "color"}
 )
 public class CollectionLogProgressPlugin extends Plugin
 {
@@ -493,7 +493,7 @@ public class CollectionLogProgressPlugin extends Plugin
                 );
             }
 
-            filterPageRows(tabIndex, titleWidgets, pages, obtainedCounts, pageCount);
+            layoutPageRows(tabIndex, titleWidgets, pages, obtainedCounts, pageCount);
         }
 
         applyTabProgress();
@@ -557,7 +557,7 @@ public class CollectionLogProgressPlugin extends Plugin
         }
     }
 
-    private void filterPageRows(
+    private void layoutPageRows(
         int tabIndex,
         Widget[] textChildren,
         List<CollectionPage> pages,
@@ -565,7 +565,7 @@ public class CollectionLogProgressPlugin extends Plugin
         int pageCount
     )
     {
-        if (!hasActivePageFilter() || tabIndex >= BACKGROUND_WIDGETS.length)
+        if (!hasActivePageLayout() || tabIndex >= BACKGROUND_WIDGETS.length)
         {
             return;
         }
@@ -616,8 +616,9 @@ public class CollectionLogProgressPlugin extends Plugin
             strideY = Math.max(1, backgroundChildren[0].getOriginalHeight());
         }
 
-        String selectedPageName = getCurrentPageName();
-        int visibleSlot = 0;
+        int[] percentages = new int[count];
+        String[] pageNames = new String[count];
+        List<Integer> visiblePageIndexes = new ArrayList<>(count);
         for (int pageIndex = 0; pageIndex < count; pageIndex++)
         {
             Widget textChild = textChildren[pageIndex];
@@ -627,6 +628,8 @@ public class CollectionLogProgressPlugin extends Plugin
 
             int obtained = obtainedCounts[pageIndex];
             int total = pages.get(pageIndex).getTotal();
+            percentages[pageIndex] = ProgressScale.percentage(obtained, total);
+            pageNames[pageIndex] = textState.text;
             if (shouldHidePage(obtained, total))
             {
                 hideRowWidget(textChild);
@@ -634,11 +637,30 @@ public class CollectionLogProgressPlugin extends Plugin
                 continue;
             }
 
+            visiblePageIndexes.add(pageIndex);
+        }
+
+        if (config.sortByCompletion())
+        {
+            CompletionSort.sort(
+                visiblePageIndexes,
+                percentages,
+                pageNames,
+                config.reverseCompletionSort()
+            );
+        }
+
+        String selectedPageName = getCurrentPageName();
+        int visibleSlot = 0;
+        for (int pageIndex : visiblePageIndexes)
+        {
+            Widget textChild = textChildren[pageIndex];
+            Widget backgroundChild = backgroundChildren[pageIndex];
             int newY = startY + visibleSlot * strideY;
             showRowWidget(textChild, newY);
             showRowWidget(backgroundChild, newY);
 
-            boolean selected = selectedPageName != null && selectedPageName.equals(textState.text);
+            boolean selected = selectedPageName != null && selectedPageName.equals(pageNames[pageIndex]);
             backgroundChild.setOpacity(
                 selected
                     ? SELECTED_ROW_OPACITY
@@ -683,6 +705,11 @@ public class CollectionLogProgressPlugin extends Plugin
         return config.hideUnstartedPages()
             || config.hidePartialPages()
             || config.hideCompletedPages();
+    }
+
+    private boolean hasActivePageLayout()
+    {
+        return config.sortByCompletion() || hasActivePageFilter();
     }
 
     private void hideRowWidget(Widget widget)
