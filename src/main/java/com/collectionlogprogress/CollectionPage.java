@@ -1,29 +1,46 @@
 package com.collectionlogprogress;
 
+import java.util.Collection;
 import java.util.Set;
+import net.runelite.client.game.ItemVariationMapping;
 
 final class CollectionPage
 {
-    private final int[] itemIds;
+    private final int[][] itemIdsBySlot;
 
     CollectionPage(int[] itemIds)
     {
-        this.itemIds = itemIds.clone();
+        itemIdsBySlot = new int[itemIds.length][];
+        for (int itemIndex = 0; itemIndex < itemIds.length; itemIndex++)
+        {
+            Collection<Integer> variations = ItemVariationMapping.getVariations(itemIds[itemIndex]);
+            int[] slotItemIds = new int[variations.size()];
+            int variationIndex = 0;
+            for (int variation : variations)
+            {
+                slotItemIds[variationIndex++] = variation;
+            }
+            itemIdsBySlot[itemIndex] = slotItemIds;
+        }
     }
 
     int getTotal()
     {
-        return itemIds.length;
+        return itemIdsBySlot.length;
     }
 
     int countObtained(Set<Integer> obtainedItems)
     {
         int count = 0;
-        for (int itemId : itemIds)
+        for (int[] slotItemIds : itemIdsBySlot)
         {
-            if (obtainedItems.contains(itemId))
+            for (int itemId : slotItemIds)
             {
-                count++;
+                if (obtainedItems.contains(itemId))
+                {
+                    count++;
+                    break;
+                }
             }
         }
         return count;
