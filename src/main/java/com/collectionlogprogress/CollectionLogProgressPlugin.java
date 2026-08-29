@@ -24,9 +24,11 @@ import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.SpriteID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetPositionMode;
 import net.runelite.api.widgets.WidgetTextAlignment;
 import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.callback.ClientThread;
@@ -67,11 +69,15 @@ public class CollectionLogProgressPlugin extends Plugin
     private static final int FILTER_PROMPT_HEIGHT = 12;
     private static final int FILTER_PROMPT_GAP = 1;
     private static final int FILTER_BUTTON_IDEAL_WIDTH = 56;
-    private static final int FILTER_BUTTON_MIN_WIDTH = 36;
     private static final int FILTER_BUTTON_GAP = 4;
     private static final int FILTER_SEARCH_GAP = 5;
     private static final int FILTER_CONTROLS_PREFERRED_X = 178;
-    private static final int FILTER_TITLE_GAP = 8;
+    private static final int FILTER_RIGHT_FALLBACK = 33;
+    private static final int RIGHT_HEADER_BUTTON_MIN_WIDTH = 40;
+    private static final int HEADER_Y_TOLERANCE = 4;
+    private static final int ORDER_BUTTON_WIDTH = 24;
+    private static final int ORDER_ICON_SIZE = 9;
+    private static final int ORDER_BUTTON_FILL_COLOR = 0x6B5A43;
     private static final int ROW_OPACITY_EVEN = 235;
     private static final int ROW_OPACITY_ODD = 255;
     private static final int SELECTED_ROW_OPACITY = 200;
@@ -160,6 +166,7 @@ public class CollectionLogProgressPlugin extends Plugin
     private int[] tabTotalCounts = new int[0];
     private Widget filterControlsLayer;
     private Widget searchPrompt;
+    private OrderButton orderButton;
 
     private boolean snapshotLoading;
     private boolean snapshotReady;
@@ -810,6 +817,7 @@ public class CollectionLogProgressPlugin extends Plugin
         {
             updateFilterButton(filterIndex);
         }
+        updateOrderButton();
         updateSearchPrompt();
     }
 
@@ -882,18 +890,39 @@ public class CollectionLogProgressPlugin extends Plugin
                 label
             );
         }
+
+        Widget orderRoot = filterControlsLayer.createChild(WidgetType.LAYER);
+        orderRoot.setNoClickThrough(true);
+        orderRoot.setHasListener(true);
+        Widget orderFrame = orderRoot.createChild(WidgetType.RECTANGLE).setFilled(true);
+        Widget orderFill = orderRoot.createChild(WidgetType.RECTANGLE).setFilled(true);
+        Widget orderHighlight = orderRoot.createChild(WidgetType.RECTANGLE).setFilled(true);
+        Widget orderShadow = orderRoot.createChild(WidgetType.RECTANGLE).setFilled(true);
+        Widget ascendingIcon = orderRoot.createChild(WidgetType.GRAPHIC)
+            .setSpriteId(SpriteID.Sortarrows.ASCENDING);
+        Widget descendingIcon = orderRoot.createChild(WidgetType.GRAPHIC)
+            .setSpriteId(SpriteID.Sortarrows.DESCENDING);
+
+        orderRoot.setOnOpListener((JavaScriptCallback) event -> cycleCompletionOrder());
+        orderRoot.setOnMouseOverListener((JavaScriptCallback) event ->
+            orderFrame.setTextColor(0xFFFFFF));
+        orderRoot.setOnMouseLeaveListener((JavaScriptCallback) event ->
+            orderFrame.setTextColor(BUTTON_FRAME_COLOR));
+
+        orderButton = new OrderButton(
+            orderRoot, orderFrame, orderFill, orderHighlight, orderShadow,
+            ascendingIcon, descendingIcon);
     }
 
     private void layoutFilterControls(Widget universe)
     {
         Widget searchButton = client.getWidget(InterfaceID.Collection.SEARCH_TOGGLE);
 
-        int controlsX = FILTER_CONTROLS_PREFERRED_X;
-        int titleLeft = universe.getWidth() / 2 - 100;
+        int orderX = FILTER_CONTROLS_PREFERRED_X;
         int y = 7;
         if (searchButton != null)
         {
-            controlsX = searchButton.getOriginalX()
+            orderX = searchButton.getOriginalX()
                 + searchButton.getOriginalWidth() + FILTER_SEARCH_GAP;
             y = Math.max(
                 1,
@@ -902,38 +931,33 @@ public class CollectionLogProgressPlugin extends Plugin
             );
         }
 
-        int availableWidth = titleLeft - FILTER_TITLE_GAP - controlsX;
-        int buttonWidth = Math.min(
-            FILTER_BUTTON_IDEAL_WIDTH,
-            (availableWidth - (FILTER_COUNT - 1) * FILTER_BUTTON_GAP) / FILTER_COUNT
-        );
-        if (buttonWidth < FILTER_BUTTON_MIN_WIDTH)
-        {
-            filterControlsLayer.setHidden(true);
-            return;
-        }
+        int buttonWidth = FILTER_BUTTON_IDEAL_WIDTH;
+        int filterWidth = FILTER_COUNT * buttonWidth + (FILTER_COUNT - 1) * FILTER_BUTTON_GAP;
+        int filterRight = findRightHeaderOffset(universe, y);
+        int filterX = universe.getWidth() - filterRight - filterWidth;
+        int minimumFilterX = orderX + ORDER_BUTTON_WIDTH + FILTER_BUTTON_GAP;
+        filterX = Math.max(minimumFilterX, filterX);
 
-        int totalWidth = FILTER_COUNT * buttonWidth + (FILTER_COUNT - 1) * FILTER_BUTTON_GAP;
         int totalHeight = FILTER_BUTTON_HEIGHT;
         if (!snapshotReady)
         {
             totalHeight += FILTER_PROMPT_GAP + FILTER_PROMPT_HEIGHT;
         }
         filterControlsLayer
-            .setOriginalX(controlsX)
-            .setOriginalY(y)
-            .setOriginalWidth(totalWidth)
-            .setOriginalHeight(totalHeight)
+            .setOriginalX(0)
+            .setOriginalY(0)
+            .setOriginalWidth(universe.getWidth())
+            .setOriginalHeight(y + totalHeight)
             .setHidden(false)
             .revalidate();
 
         for (int filterIndex = 0; filterIndex < FILTER_COUNT; filterIndex++)
         {
             FilterButton button = filterButtons[filterIndex];
-            int x = filterIndex * (buttonWidth + FILTER_BUTTON_GAP);
+            int x = filterX + filterIndex * (buttonWidth + FILTER_BUTTON_GAP);
             button.root
                 .setOriginalX(x)
-                .setOriginalY(0)
+                .setOriginalY(y)
                 .setOriginalWidth(buttonWidth)
                 .setOriginalHeight(FILTER_BUTTON_HEIGHT)
                 .revalidate();
@@ -953,13 +977,66 @@ public class CollectionLogProgressPlugin extends Plugin
             setBounds(button.label, 14, 1, buttonWidth - 15, FILTER_BUTTON_HEIGHT - 2);
         }
 
+        orderButton.root
+            .setOriginalX(orderX)
+            .setOriginalY(y)
+            .setOriginalWidth(ORDER_BUTTON_WIDTH)
+            .setOriginalHeight(FILTER_BUTTON_HEIGHT)
+            .revalidate();
+        setBounds(orderButton.frame, 0, 0, ORDER_BUTTON_WIDTH, FILTER_BUTTON_HEIGHT);
+        setBounds(orderButton.fill, 1, 1, ORDER_BUTTON_WIDTH - 2, FILTER_BUTTON_HEIGHT - 2);
+        setBounds(orderButton.highlight, 2, 2, ORDER_BUTTON_WIDTH - 4, 1);
+        setBounds(
+            orderButton.shadow,
+            2,
+            FILTER_BUTTON_HEIGHT - 3,
+            ORDER_BUTTON_WIDTH - 4,
+            1
+        );
+
         setBounds(
             searchPrompt,
-            0,
-            FILTER_BUTTON_HEIGHT + FILTER_PROMPT_GAP,
-            totalWidth,
+            filterX,
+            y + FILTER_BUTTON_HEIGHT + FILTER_PROMPT_GAP,
+            filterWidth,
             FILTER_PROMPT_HEIGHT
         );
+    }
+
+    private int findRightHeaderOffset(Widget universe, int headerY)
+    {
+        int rightOffset = FILTER_RIGHT_FALLBACK;
+        Widget[] children = universe.getDynamicChildren();
+        if (children == null)
+        {
+            return rightOffset;
+        }
+
+        for (Widget child : children)
+        {
+            if (child == null
+                || child == filterControlsLayer
+                || child.isHidden()
+                || child.getType() != WidgetType.TEXT
+                || child.getXPositionMode() != WidgetPositionMode.ABSOLUTE_RIGHT
+                || child.getOriginalWidth() < RIGHT_HEADER_BUTTON_MIN_WIDTH
+                || Math.abs(child.getOriginalY() - headerY) > HEADER_Y_TOLERANCE)
+            {
+                continue;
+            }
+
+            String text = child.getText();
+            if (text == null || text.trim().isEmpty())
+            {
+                continue;
+            }
+
+            rightOffset = Math.max(
+                rightOffset,
+                child.getOriginalX() + child.getOriginalWidth() + FILTER_BUTTON_GAP
+            );
+        }
+        return rightOffset;
     }
 
     private void updateSearchPrompt()
@@ -1013,6 +1090,66 @@ public class CollectionLogProgressPlugin extends Plugin
         );
     }
 
+    private void updateOrderButton()
+    {
+        if (orderButton == null)
+        {
+            return;
+        }
+
+        CompletionOrder order = getCompletionOrder();
+        orderButton.frame.setTextColor(BUTTON_FRAME_COLOR);
+        orderButton.fill.setTextColor(ORDER_BUTTON_FILL_COLOR);
+        orderButton.highlight.setTextColor(blend(ORDER_BUTTON_FILL_COLOR, 0xFFFFFF, 0.30));
+        orderButton.shadow.setTextColor(blend(ORDER_BUTTON_FILL_COLOR, 0x000000, 0.40));
+
+        int iconY = (FILTER_BUTTON_HEIGHT - ORDER_ICON_SIZE) / 2;
+        if (order == CompletionOrder.DEFAULT)
+        {
+            setBounds(orderButton.ascendingIcon, 3, iconY, ORDER_ICON_SIZE, ORDER_ICON_SIZE);
+            setBounds(
+                orderButton.descendingIcon,
+                ORDER_BUTTON_WIDTH - ORDER_ICON_SIZE - 3,
+                iconY,
+                ORDER_ICON_SIZE,
+                ORDER_ICON_SIZE
+            );
+        }
+        else
+        {
+            int iconX = (ORDER_BUTTON_WIDTH - ORDER_ICON_SIZE) / 2;
+            setBounds(orderButton.ascendingIcon, iconX, iconY, ORDER_ICON_SIZE, ORDER_ICON_SIZE);
+            setBounds(orderButton.descendingIcon, iconX, iconY, ORDER_ICON_SIZE, ORDER_ICON_SIZE);
+        }
+        orderButton.ascendingIcon.setHidden(order == CompletionOrder.DESCENDING);
+        orderButton.descendingIcon.setHidden(order == CompletionOrder.ASCENDING);
+
+        switch (order)
+        {
+            case DESCENDING:
+                orderButton.root.setName("Completion order: Highest first");
+                orderButton.root.setAction(0, "Sort lowest completion first");
+                break;
+            case ASCENDING:
+                orderButton.root.setName("Completion order: Lowest first");
+                orderButton.root.setAction(0, "Use default order");
+                break;
+            case DEFAULT:
+            default:
+                orderButton.root.setName("Completion order: Default");
+                orderButton.root.setAction(0, "Sort highest completion first");
+                break;
+        }
+    }
+
+    private CompletionOrder getCompletionOrder()
+    {
+        return CompletionOrder.fromConfig(
+            config.sortByCompletion(),
+            config.reverseCompletionSort()
+        );
+    }
+
     private int getFilterColor(int filterIndex)
     {
         switch (filterIndex)
@@ -1049,6 +1186,21 @@ public class CollectionLogProgressPlugin extends Plugin
             CollectionLogProgressConfig.GROUP,
             FILTER_CONFIG_KEYS[filterIndex],
             !isPageFilterEnabled(filterIndex)
+        );
+    }
+
+    private void cycleCompletionOrder()
+    {
+        CompletionOrder next = getCompletionOrder().next();
+        configManager.setConfiguration(
+            CollectionLogProgressConfig.GROUP,
+            CollectionLogProgressConfig.REVERSE_COMPLETION_SORT_KEY,
+            next.isReversed()
+        );
+        configManager.setConfiguration(
+            CollectionLogProgressConfig.GROUP,
+            CollectionLogProgressConfig.SORT_BY_COMPLETION_KEY,
+            next.isSorted()
         );
     }
 
@@ -1107,6 +1259,16 @@ public class CollectionLogProgressPlugin extends Plugin
                 button.checkboxMark.setHidden(true);
                 button.label.setHidden(true);
             }
+            if (orderButton != null)
+            {
+                orderButton.root.setHidden(true);
+                orderButton.frame.setHidden(true);
+                orderButton.fill.setHidden(true);
+                orderButton.highlight.setHidden(true);
+                orderButton.shadow.setHidden(true);
+                orderButton.ascendingIcon.setHidden(true);
+                orderButton.descendingIcon.setHidden(true);
+            }
             if (searchPrompt != null)
             {
                 searchPrompt.setHidden(true);
@@ -1125,6 +1287,7 @@ public class CollectionLogProgressPlugin extends Plugin
     {
         filterControlsLayer = null;
         searchPrompt = null;
+        orderButton = null;
         for (int filterIndex = 0; filterIndex < FILTER_COUNT; filterIndex++)
         {
             filterButtons[filterIndex] = null;
@@ -1341,6 +1504,36 @@ public class CollectionLogProgressPlugin extends Plugin
             this.checkbox = checkbox;
             this.checkboxMark = checkboxMark;
             this.label = label;
+        }
+    }
+
+    private static final class OrderButton
+    {
+        private final Widget root;
+        private final Widget frame;
+        private final Widget fill;
+        private final Widget highlight;
+        private final Widget shadow;
+        private final Widget ascendingIcon;
+        private final Widget descendingIcon;
+
+        private OrderButton(
+            Widget root,
+            Widget frame,
+            Widget fill,
+            Widget highlight,
+            Widget shadow,
+            Widget ascendingIcon,
+            Widget descendingIcon
+        )
+        {
+            this.root = root;
+            this.frame = frame;
+            this.fill = fill;
+            this.highlight = highlight;
+            this.shadow = shadow;
+            this.ascendingIcon = ascendingIcon;
+            this.descendingIcon = descendingIcon;
         }
     }
 }

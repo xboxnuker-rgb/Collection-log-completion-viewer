@@ -10,6 +10,8 @@ import net.runelite.client.config.ConfigSection;
 public interface CollectionLogProgressConfig extends Config
 {
     String GROUP = "collection-log-progress";
+    String SORT_BY_COMPLETION_KEY = "sortByCompletion";
+    String REVERSE_COMPLETION_SORT_KEY = "reverseCompletionSort";
 
     @ConfigSection(
         name = "Sidebar",
@@ -87,7 +89,7 @@ public interface CollectionLogProgressConfig extends Config
 
     @ConfigItem(
         position = 5,
-        keyName = "sortByCompletion",
+        keyName = SORT_BY_COMPLETION_KEY,
         name = "Sort by completion",
         description = "Sort Collection Log pages by completion percentage from 100% to 0%",
         section = sidebarSection
@@ -99,7 +101,7 @@ public interface CollectionLogProgressConfig extends Config
 
     @ConfigItem(
         position = 6,
-        keyName = "reverseCompletionSort",
+        keyName = REVERSE_COMPLETION_SORT_KEY,
         name = "Reverse sort order",
         description = "Reverse completion sorting to run from 0% to 100%",
         section = sidebarSection
