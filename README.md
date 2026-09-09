@@ -1,68 +1,46 @@
 # Collection Log Progress
 
-A passive RuneLite interface plugin that makes Collection Log progress easier
-to scan. Each page name in the left-hand list can show a whole-number completion
-percentage and use fixed state colours: red at 0%, orange from 1–99%, and
-RuneScape's completion green at 100%. In-log controls can hide unstarted,
-partial or completed pages and compact the remaining list. A three-state header
-control can restore native order or place the most- or least-complete pages first.
+<img src="icon.png" alt="Plugin icon" width="48" height="48">
 
-## Features
+[![Total installs](https://img.shields.io/endpoint?url=https://api.runelite.net/pluginhub/shields/installs/plugin/collection-log-progress)](https://runelite.net/plugin-hub/show/collection-log-progress)
+[![Plugin rank](https://img.shields.io/endpoint?url=https://api.runelite.net/pluginhub/shields/rank/plugin/collection-log-progress)](https://runelite.net/plugin-hub/show/collection-log-progress)
 
-- Adds `0%` to `100%` progress beside Collection Log page and tab names, with
-  separate controls for hiding the endpoint labels.
-- Uses simple red, orange and green states that remain clear on both small and
-  large pages.
-- Keeps the five aggregate tab titles on the smooth scale at all times.
-- Offers the same smooth scale for page names as an option, disabled by default.
-- Provides colour pickers for the unstarted, partial and completed anchors.
-- Adds three colour-matched `Hide` checkboxes inside the Collection Log for
-  unstarted, partial and completed pages.
-- Shows `Click Search to load` beneath those controls until the first complete
-  snapshot is received.
-- Compacts visible rows and updates the scrollbar when a filter is enabled;
-  filter choices persist between sessions.
-- Optionally sorts rows by completion from `100%` to `0%` or `0%` to `100%`;
-  matching percentages remain alphabetical. The sidebar settings and compact
-  in-log order control stay synchronized.
-- Reserves the configured completion colour for fully completed pages.
-- Reads page definitions from RuneScape's cache rather than maintaining a static
-  item list.
-- Leaves the selected-page header, item icons and central item panel unchanged.
-- Aggregates page progress into the five top-level tab titles.
-- Provides separate toggles for colours and percentages.
+[![Support on Patreon](https://img.shields.io/badge/Support_on-Patreon-FF424D?style=for-the-badge&logo=patreon&logoColor=white)](https://www.patreon.com/cw/GSVS_UK_ACM/shop)
 
-To load progress, open your own Collection Log and click its native **Search**
-button once. The plugin passively listens for the complete item snapshot that
-RuneScape sends after that click. It never operates the button or runs a game
-script to request the data, and it does not expose the snapshot outside the
-client. Click Search again whenever you want to refresh the snapshot.
+Find your next Collection Log goal with coloured page names, completion percentages and filters inside the log itself.
 
-The plugin does not use external services, write files, alter combat, inject
-input, or automate gameplay.
+## See progress at a glance
+
+- **Colour names** marks unstarted pages red, partial pages orange and completed pages green.
+- **Show percentages** adds whole-number progress to page and tab names. **Show 0%** and **Show 100%** can be switched off separately to reduce clutter.
+- **Smooth colour scale** blends page colours as progress increases; it starts off. When colours are enabled, the five aggregate tab titles always use the smooth scale.
+- Customise the **Unstarted**, **Partial** and **Completed** colours to suit your setup.
+
+## Choose what to work on
+
+Use the three colour-matched **Hide** checkboxes inside the Collection Log to hide unstarted, partial or completed pages. The remaining rows close up and your filter choices persist between sessions.
+
+- Hide completed pages to focus on missing slots.
+- Hide unstarted and completed pages to revisit goals already in progress.
+- Enable **Sort by completion** to put the closest pages first; **Reverse sort order** starts with the least complete.
+- The compact in-log order control cycles between native order and both completion directions. Equal percentages remain alphabetical.
+
+## Load your progress
+
+Open **your own Collection Log** and click its native **Search** button once. The plugin listens for the item snapshot; until it arrives, the controls say `Click Search to load`. Click Search again whenever you want to refresh.
+
+The central item panel stays as it is. Collection Log data remains inside the client, with no external service or file export.
+
+## Installation
+
+Open RuneLite's **Configuration → Plugin Hub**, search for **Collection Log Progress** and install it. Open the plugin's settings to customise the options above.
+
+[View on the Plugin Hub](https://runelite.net/plugin-hub/show/collection-log-progress).
 
 ## Development
 
-Java 11 is required.
+See [development and implementation reference](DEVELOPMENT_REFERENCE.md) for the preserved setup instructions, technical details, testing notes and existing project documentation.
 
-Build and run the unit tests:
+## Support
 
-```powershell
-.\gradlew.bat clean build
-```
-
-Launch the RuneLite development client:
-
-```powershell
-.\gradlew.bat run
-```
-
-When using a Jagex Account, follow RuneLite's
-[development-client login instructions](https://github.com/runelite/runelite/wiki/Using-Jagex-Accounts).
-
-RuneLite and RuneScape widgets cannot be validated by unit tests alone. A fresh
-development-client JVM and manual in-game checks are required after Java changes.
-
-## License
-
-This project is licensed under the BSD 2-Clause License. See `LICENSE`.
+Enjoy the plugin? [Visit the GSVS UK ACM Patreon shop](https://www.patreon.com/cw/GSVS_UK_ACM/shop) to support the work.
