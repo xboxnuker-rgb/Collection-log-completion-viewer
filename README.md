@@ -16,6 +16,8 @@ Find your next Collection Log goal with coloured page names, completion percenta
 - **Smooth colour scale** blends page colours as progress increases; it starts off. When colours are enabled, the five aggregate tab titles always use the smooth scale.
 - Customise the **Unstarted**, **Partial** and **Completed** colours to suit your setup.
 
+![Collection Log Progress sidebar and colour settings](docs/images/collection-log-progress-settings.png)
+
 ## Choose what to work on
 
 Use the three colour-matched **Hide** checkboxes inside the Collection Log to hide unstarted, partial or completed pages. The remaining rows close up and your filter choices persist between sessions.
@@ -25,9 +27,22 @@ Use the three colour-matched **Hide** checkboxes inside the Collection Log to hi
 - Enable **Sort by completion** to put the closest pages first; **Reverse sort order** starts with the least complete.
 - The compact in-log order control cycles between native order and both completion directions. Equal percentages remain alphabetical.
 
+<table>
+  <tr>
+    <td><strong>Highest completion first</strong></td>
+    <td><strong>Native order with completed pages hidden</strong></td>
+  </tr>
+  <tr>
+    <td><a href="docs/images/collection-log-progress-sorted.png"><img src="docs/images/collection-log-progress-sorted.png" alt="Collection Log pages sorted from highest completion to lowest"></a></td>
+    <td><a href="docs/images/collection-log-progress-filtered.png"><img src="docs/images/collection-log-progress-filtered.png" alt="Collection Log in native order with completed pages hidden"></a></td>
+  </tr>
+</table>
+
 ## Load your progress
 
 Open **your own Collection Log** and click its native **Search** button once. The plugin listens for the item snapshot; until it arrives, the controls say `Click Search to load`. Click Search again whenever you want to refresh.
+
+![Sync prompt shown until the Collection Log Search action is used](docs/images/collection-log-progress-sync.png)
 
 The central item panel stays as it is. Collection Log data remains inside the client, with no external service or file export.
 
